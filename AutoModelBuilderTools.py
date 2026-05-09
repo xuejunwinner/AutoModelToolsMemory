@@ -2480,6 +2480,15 @@ def _handle_beamsearch(args):
     logger.info(f"BeamSearch mode completed! 最佳特征数: {len(best_features)}")
 
 
+def _parallel_map(worker_fn, args_list, n_workers, desc):
+    """统一的并行/串行 worker 分发"""
+    if n_workers > 1:
+        with multiprocessing.Pool(processes=n_workers) as pool:
+            return list(tqdm(pool.imap_unordered(worker_fn, args_list),
+                             total=len(args_list), desc=desc))
+    return [worker_fn(a) for a in tqdm(args_list, desc=desc)]
+
+
 def _handle_feature_analysis(args):
     """feature_analysis 模式：特征分析（IV/PSI/KS/AUC/覆盖率/EDA）"""
     FeatureAnalysisToolkit.ensure_dir(args.output_dir)
@@ -2502,13 +2511,8 @@ def _handle_feature_analysis(args):
 
     # IV（多进程安全：使用模块级 worker 函数）
     if args.compute_iv or args.full_eda:
-        if n_workers > 1:
-            worker_args = [(feat, df, target) for feat in features]
-            with multiprocessing.Pool(processes=n_workers) as pool:
-                iv_list = list(tqdm(pool.imap_unordered(_fa_iv_worker, worker_args),
-                                    total=len(features), desc="IV计算"))
-        else:
-            iv_list = [_fa_iv_worker((f, df, target)) for f in tqdm(features, desc="IV计算")]
+        worker_args = [(feat, df, target) for feat in features]
+        iv_list = _parallel_map(_fa_iv_worker, worker_args, n_workers, "IV计算")
         results['iv'] = pd.DataFrame(iv_list).sort_values('iv', ascending=False)
         results['iv'].to_csv(os.path.join(args.output_dir, 'iv.csv'), index=False)
         logger.info("IV计算完成")
@@ -2526,9 +2530,7 @@ def _handle_feature_analysis(args):
             if n_workers > 1:
                 psi_worker_args = [(feat, df.loc[expected_mask, feat], df.loc[actual_mask, feat],
                                     args.psi_bins, exp_val, act_val) for feat in features]
-                with multiprocessing.Pool(processes=n_workers) as pool:
-                    psi_records.extend(list(tqdm(pool.imap_unordered(_fa_psi_worker, psi_worker_args),
-                                                 total=len(features), desc=f"PSI({act_val})")))
+                psi_records.extend(_parallel_map(_fa_psi_worker, psi_worker_args, n_workers, f"PSI({act_val})"))
             else:
                 for feat in features:
                     psi = FeatureAnalysisToolkit.calculate_psi(
@@ -2544,32 +2546,23 @@ def _handle_feature_analysis(args):
         results['psi'].to_csv(os.path.join(args.output_dir, 'psi.csv'), index=False)
         logger.info(f"PSI计算完成: {len(act_vals)} 个对比期")
 
-    # 单特征AUC
-    if args.compute_auc:
+    # 单特征AUC + KS（共享 valid_mask/y）
+    need_auc = args.compute_auc
+    need_ks = args.compute_ks
+    if need_auc or need_ks:
         valid_mask = df[target].isin([0, 1])
         y = df.loc[valid_mask, target].values
-        if n_workers > 1:
-            worker_args = [(feat, df.loc[valid_mask], y) for feat in features]
-            with multiprocessing.Pool(processes=n_workers) as pool:
-                auc_records = list(tqdm(pool.imap_unordered(_fa_auc_worker, worker_args),
-                                        total=len(features), desc="AUC计算"))
-        else:
-            auc_records = [_fa_auc_worker((f, df.loc[valid_mask], y)) for f in tqdm(features, desc="AUC计算")]
+        df_valid = df.loc[valid_mask]
+        worker_args = [(feat, df_valid, y) for feat in features]
+
+    if need_auc:
+        auc_records = _parallel_map(_fa_auc_worker, worker_args, n_workers, "AUC计算")
         results['single_auc'] = pd.DataFrame(auc_records).sort_values('auc', ascending=False)
         results['single_auc'].to_csv(os.path.join(args.output_dir, 'single_auc.csv'), index=False)
         logger.info("单特征AUC计算完成")
 
-    # KS
-    if args.compute_ks:
-        valid_mask = df[target].isin([0, 1])
-        y = df.loc[valid_mask, target].values
-        if n_workers > 1:
-            worker_args = [(feat, df.loc[valid_mask], y) for feat in features]
-            with multiprocessing.Pool(processes=n_workers) as pool:
-                ks_records = list(tqdm(pool.imap_unordered(_fa_ks_worker, worker_args),
-                                       total=len(features), desc="KS计算"))
-        else:
-            ks_records = [_fa_ks_worker((f, df.loc[valid_mask], y)) for f in tqdm(features, desc="KS计算")]
+    if need_ks:
+        ks_records = _parallel_map(_fa_ks_worker, worker_args, n_workers, "KS计算")
         results['ks'] = pd.DataFrame(ks_records).sort_values('ks', ascending=False)
         results['ks'].to_csv(os.path.join(args.output_dir, 'ks.csv'), index=False)
         logger.info("KS计算完成")
@@ -2832,7 +2825,7 @@ def _fa_auc_worker(args):
 
 
 def _fa_ks_worker(args):
-    """KS 计算 worker"""
+    """KS 计算 worker（复用 AUC worker 的 NaN 过滤逻辑）"""
     feat, df_subset, y = args
     feat_vals = df_subset[feat].values
     nan_mask = ~np.isnan(feat_vals)
