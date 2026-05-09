@@ -213,10 +213,8 @@ class FeatureAnalysisToolkit:
         :return: DataFrame[feature, iv]，按IV降序排列
         """
         features = [col for col in data.columns if col != target_col]
-        iv_results = []
-        for feature in features:
-            woe_info = FeatureAnalysisToolkit.calculate_woe(data[feature], data[target_col])
-            iv_results.append({'feature': feature, 'iv': woe_info['iv']})
+        iv_results = [{'feature': f, 'iv': FeatureAnalysisToolkit.calculate_single_iv(data, f, target_col)}
+                      for f in features]
         return pd.DataFrame(iv_results).sort_values('iv', ascending=False)
 
     # ---- WOE 转换 ----
@@ -380,18 +378,18 @@ class FeatureAnalysisToolkit:
         FeatureAnalysisToolkit.ensure_dir(output_dir)
 
         features = list(X.columns)
-        data = X.copy()
         target_col = '__target__'
-        data[target_col] = y
 
-        # 覆盖率
-        coverage = (1 - data[features].isnull().sum() / len(data)).to_dict()
+        # 覆盖率（无需复制整个 DataFrame）
+        coverage = (1 - X.isnull().sum() / len(X)).to_dict()
         coverage_df = pd.DataFrame.from_dict(coverage, orient='index', columns=['coverage'])
         coverage_df.to_csv(os.path.join(output_dir, 'coverage.csv'))
         logger.info("Coverage analysis completed")
 
         # IV
-        iv_df = FeatureAnalysisToolkit.calculate_batch_iv(data, target_col)
+        data_for_iv = X.copy()
+        data_for_iv[target_col] = y
+        iv_df = FeatureAnalysisToolkit.calculate_batch_iv(data_for_iv, target_col)
         iv_df.to_csv(os.path.join(output_dir, 'iv_woe.csv'), index=False)
         logger.info("IV analysis completed")
 
@@ -437,29 +435,34 @@ class FeatureAnalysisToolkit:
         feat_max = d['feat'].max() + 1e-6
         current_bins = [(feat_min, feat_max)]
 
+        # 预提取 numpy 数组加速
+        feat_arr = d['feat'].values
+        tgt_arr = d['target'].values
+
         for _ in range(max_bins - 1):
             best_score = -1
             best_threshold = None
             best_idx = None
 
             for idx, (low, high) in enumerate(current_bins):
-                mask = (d['feat'] > low) & (d['feat'] <= high)
-                subset = d[mask]
-                if len(subset) < 10 or subset['target'].nunique() < 2:
+                mask = (feat_arr > low) & (feat_arr <= high)
+                sub_feat = feat_arr[mask]
+                sub_tgt = tgt_arr[mask]
+                if len(sub_feat) < 10 or len(np.unique(sub_tgt)) < 2:
                     continue
-                dt = DecisionTreeClassifier(max_depth=1, min_samples_leaf=max(5, int(len(subset) * 0.05)),
+                dt = DecisionTreeClassifier(max_depth=1, min_samples_leaf=max(5, int(len(sub_feat) * 0.05)),
                                             criterion='gini')
-                dt.fit(subset[['feat']], subset['target'])
+                dt.fit(sub_feat.reshape(-1, 1), sub_tgt)
                 if dt.tree_.node_count < 3:
                     continue
                 threshold = dt.tree_.threshold[0]
                 if threshold <= low or threshold >= high:
                     continue
-                left_n = (subset['feat'] <= threshold).sum()
-                right_n = len(subset) - left_n
+                left_n = (sub_feat <= threshold).sum()
+                right_n = len(sub_feat) - left_n
                 if left_n < 5 or right_n < 5:
                     continue
-                n = len(subset)
+                n = len(sub_feat)
                 gini_parent = dt.tree_.impurity[0]
                 gini_left = dt.tree_.impurity[1]
                 gini_right = dt.tree_.impurity[2]
@@ -475,17 +478,16 @@ class FeatureAnalysisToolkit:
             current_bins[best_idx] = (low, best_threshold)
             current_bins.insert(best_idx + 1, (best_threshold, high))
 
-        # 合并非单调相邻 bin
-        def _bad_rates(bins, data):
+        # 合并非单调相邻 bin（使用 numpy 向量化计算 bad_rate）
+        def _bad_rates(bins):
             rates = []
             for low, high in bins:
-                m = (data['feat'] > low) & (data['feat'] <= high)
-                sub = data[m]
-                rates.append(sub['target'].mean() if len(sub) > 0 else 0)
+                m = (feat_arr > low) & (feat_arr <= high)
+                rates.append(tgt_arr[m].mean() if m.sum() > 0 else 0)
             return rates
 
         for _ in range(len(current_bins) - 1):
-            rates = _bad_rates(current_bins, d)
+            rates = _bad_rates(current_bins)
             is_mono = (all(rates[i] <= rates[i + 1] + 1e-8 for i in range(len(rates) - 1)) or
                        all(rates[i + 1] <= rates[i] + 1e-8 for i in range(len(rates) - 1)))
             if is_mono or len(current_bins) <= 2:
@@ -1108,6 +1110,13 @@ class AutoModelBuilder:
         logger.info(f"Hyperparameter tuning completed. Best params: {best_params}")
         return best_params
     
+    def _prepare_features(self, X):
+        """预处理特征数据：LR路径做fillna+scale，其他路径直接返回"""
+        if self.scaler and self.model_type == 'lr':
+            X_filled = X.fillna(0) if hasattr(X, 'fillna') else X
+            return self.scaler.transform(X_filled)
+        return X
+
     def train(self, X, y, params=None, eval_set=None, early_stopping_rounds=None):
         """
         训练模型
@@ -1267,11 +1276,7 @@ class AutoModelBuilder:
         FeatureAnalysisToolkit.ensure_dir(output_dir)
 
         # 准备数据
-        if self.scaler and self.model_type == 'lr':
-            X_filled = X.fillna(0) if hasattr(X, 'fillna') else X
-            X_processed = self.scaler.transform(X_filled)
-        else:
-            X_processed = X
+        X_processed = self._prepare_features(X)
 
         # SHAP分析
         if self.model_type in ['lgb', 'xgb']:
@@ -1309,9 +1314,9 @@ class AutoModelBuilder:
         logger.info("Computing SHAP via xgb.Booster.predict(pred_contribs=True)")
         try:
             booster = self.model.get_booster()
-            X_filled = X.fillna(0) if hasattr(X, 'fillna') else X
+            X_processed = self._prepare_features(X)
             missing = 0.0
-            dm = xgb.DMatrix(X_filled, feature_names=self.features, missing=missing)
+            dm = xgb.DMatrix(X_processed, feature_names=self.features, missing=missing)
 
             # pred_contribs 返回 shape=(n_samples, n_features+1)，最后一列是 bias
             contribs = booster.predict(dm, pred_contribs=True)
@@ -1344,11 +1349,7 @@ class AutoModelBuilder:
             raise ValueError("Model is not trained or loaded")
         
         # 准备数据
-        if self.scaler and self.model_type == 'lr':
-            X_filled = X.fillna(0) if hasattr(X, 'fillna') else X
-            X_processed = self.scaler.transform(X_filled)
-        else:
-            X_processed = X
+        X_processed = self._prepare_features(X)
 
         # 预测概率
         if hasattr(self.model, 'predict_proba'):
@@ -1850,7 +1851,7 @@ class BeamSearchFeatureSelector:
     def load_data_csv(self, train_path, oot_paths, target, features=None, sep=','):
         """从 CSV 加载数据"""
         logger.info(f"加载训练数据: {train_path}")
-        df_train = pd.read_csv(train_path, sep=sep)
+        df_train = FeatureAnalysisToolkit.load_csv(train_path, sep=sep)
         if features is None:
             features = [c for c in df_train.columns if c != target]
         df_train = df_train[df_train[target].isin([0, 1])].copy()
@@ -1859,7 +1860,7 @@ class BeamSearchFeatureSelector:
         oot_list = []
         for i, path in enumerate(oot_paths):
             logger.info(f"加载 OOT{i+1}: {path}")
-            df_oot = pd.read_csv(path, sep=sep)
+            df_oot = FeatureAnalysisToolkit.load_csv(path, sep=sep)
             df_oot = df_oot[df_oot[target].isin([0, 1])].copy()
             df_oot[features] = df_oot[features].fillna(self.missing_value)
             oot_list.append(df_oot)
@@ -2522,16 +2523,23 @@ def _handle_feature_analysis(args):
         psi_records = []
         for act_val in act_vals:
             actual_mask = df[args.psi_expected_col] == act_val
-            for feat in features:
-                psi = FeatureAnalysisToolkit.calculate_psi(
-                    df.loc[expected_mask, feat], df.loc[actual_mask, feat], bins=args.psi_bins)
-                psi_records.append({
-                    'feature': feat, 'psi': psi,
-                    'baseline': exp_val, 'compare': act_val,
-                    'stability': ('Stable' if pd.notna(psi) and psi < 0.1
-                                  else ('Slightly unstable' if pd.notna(psi) and psi < 0.25
-                                        else 'Unstable'))
-                })
+            if n_workers > 1:
+                psi_worker_args = [(feat, df.loc[expected_mask, feat], df.loc[actual_mask, feat],
+                                    args.psi_bins, exp_val, act_val) for feat in features]
+                with multiprocessing.Pool(processes=n_workers) as pool:
+                    psi_records.extend(list(tqdm(pool.imap_unordered(_fa_psi_worker, psi_worker_args),
+                                                 total=len(features), desc=f"PSI({act_val})")))
+            else:
+                for feat in features:
+                    psi = FeatureAnalysisToolkit.calculate_psi(
+                        df.loc[expected_mask, feat], df.loc[actual_mask, feat], bins=args.psi_bins)
+                    psi_records.append({
+                        'feature': feat, 'psi': psi,
+                        'baseline': exp_val, 'compare': act_val,
+                        'stability': ('Stable' if pd.notna(psi) and psi < 0.1
+                                      else ('Slightly unstable' if pd.notna(psi) and psi < 0.25
+                                            else 'Unstable'))
+                    })
         results['psi'] = pd.DataFrame(psi_records)
         results['psi'].to_csv(os.path.join(args.output_dir, 'psi.csv'), index=False)
         logger.info(f"PSI计算完成: {len(act_vals)} 个对比期")
@@ -2793,6 +2801,19 @@ def _handle_model_evaluation(args):
 # ========================
 # feature_analysis 多进程 worker 函数（模块级，支持 pickle）
 # ========================
+
+def _fa_psi_worker(args):
+    """PSI 计算 worker"""
+    feat, expected, actual, bins, baseline, compare = args
+    psi = FeatureAnalysisToolkit.calculate_psi(expected, actual, bins=bins)
+    return {
+        'feature': feat, 'psi': psi,
+        'baseline': baseline, 'compare': compare,
+        'stability': ('Stable' if pd.notna(psi) and psi < 0.1
+                      else ('Slightly unstable' if pd.notna(psi) and psi < 0.25
+                            else 'Unstable'))
+    }
+
 
 def _fa_iv_worker(args):
     """IV 计算 worker"""
