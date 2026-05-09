@@ -1,0 +1,80 @@
+test_name,status,message,elapsed_sec
+T1.1 calculate_woe,PASS,"iv=0.0000, woe_keys=5000",0.011796951293945312
+T1.2 calculate_woe_edge,PASS,全0/全1目标返回iv=0,
+T1.3 calculate_single_iv,PASS,iv=0.0317,0.011408567428588867
+T1.4 calculate_single_iv_const,PASS,iv=0.0,
+T1.5 calculate_single_iv_empty,PASS,iv=0.0,
+T1.6 calculate_batch_iv,PASS,"15 features, top_iv=0.0315",0.0511479377746582
+T1.7 woe_transform,PASS,"shape=(5000, 15)",0.06563663482666016
+T1.8 calculate_psi,PASS,psi=0.0205,0.005807399749755859
+T1.9 calculate_psi_empty,PASS,psi=0.0,
+T1.10 calculate_psi_all_nan,PASS,psi=0.0,
+T1.11 calculate_psi_simple,PASS,psi=0.0059,0.0040509700775146484
+T1.12 calculate_single_auc,PASS,auc=0.46,0.0034003257751464844
+T1.13 calculate_single_auc_nan_feat,PASS,auc=nan,
+T1.14 calculate_ks,PASS,ks=0.0036,0.0010013580322265625
+T1.15 calculate_auc_ks,PASS,"auc=0.46, ks=0.0036",0.002165555953979492
+T1.16 calculate_auc_ks_single_class,PASS,返回NaN（预期）,
+T1.17 eda_analysis,PASS,"3 outputs, files verified",0.21840500831604004
+T2.1 load_data,PASS,"X=(5000, 15), y=(5000,)",0.010835647583007812
+T2.2 load_data_unsupported_format,PASS,正确抛出ValueError,
+T2.3 train_xgb,PASS,model=XGBClassifier,0.02755284309387207
+T2.4 train_lgb,PASS,preds_len=50,2.0055484771728516
+T2.5 train_lr,PASS,"preds_len=50, scaler=True",0.02935171127319336
+T2.6 save_load_model,PASS,roundtrip OK,0.0076808929443359375
+T2.7 get_feature_importance,PASS,"top=feature_10, imp=0.1272544264793396",0.0042171478271484375
+T2.8 get_importance_no_model,PASS,正确抛出ValueError,
+T2.9 predict,PASS,"mean=0.0505, range=[0.0238, 0.1690]",0.002758026123046875
+T2.10 predict_no_model,PASS,正确抛出ValueError,
+T2.11 shap_analysis,PASS,files verified,0.01343846321105957
+T2.12 lr_feature_importance,PASS,top=feature_00,
+T3.1 scoring_pkl_model,PASS,"scores=5000, mean=0.0515",0.021312475204467773
+T3.2 scoring_json_model,PASS,结果与pkl模型一致,0.0172884464263916
+T3.3 scoring_chunk_mode,PASS,"auc=0.9992, samples=5000",0.14331960678100586
+T3.4 scoring_ntree_limit,PASS,"full_mean=0.0515, half_mean=0.0518",0.005308866500854492
+T4.1 model_eval_basic,PASS,"auc=0.9992, ks=0.9792",0.0035941600799560547
+T4.2 multi_score_compare,PASS,"score1_auc=0.9992, score2_auc=0.9992",0.00521540641784668
+T4.3 time_slice_eval,PASS,4 slices,0.012702465057373047
+T4.4 group_eval,PASS,2 groups,0.007715463638305664
+T4.5 lift_calculation,PASS,"lift_range=[0.00, 9.96]",0.00817561149597168
+T4.6 cross_group_eval,PASS,8 segments,0.029424667358398438
+T5.1 attribution_init,PASS,features=15,0.002741098403930664
+T5.2 attribution_delegates,PASS,"psi=0.0281, iv=0.0317, auc=0.46",
+T5.3 distribution_shift,PASS,"auc_drop=-0.0000, 15 features",0.24190521240234375
+T5.4 permutation_importance,PASS,"base_auc=0.9986, 15 features",1.351468801498413
+T5.5 full_attribution,PASS,auc_drop=-0.0000,1.552706241607666
+T5.6 bad_features_format,PASS,正确抛出ValueError,
+T6.1 beamsearch_load_data,PASS,"train=2000, oot=2000, feats=15",0.022417306900024414
+T6.2 predict_evals,PASS,"auc=0.497, ks=0.0672",0.002533435821533203
+T6.3 feature_importances_frame,PASS,"imp_df shape=(0, 3)",0.014880657196044922
+T6.4 beamsearch_single_process,FAIL,'tuple' object has no attribute 'copy',
+T6.5 beamsearch_memmap_mp,FAIL,Can't get local object 'BeamSearchFeatureSelector.beam_search.<locals>._eval_combination_mp',
+T7.1 report_load_data,PASS,"df=5000, targets=2",0.028596878051757812
+T7.2 report_load_data_mapping,PASS,列名映射成功,
+T7.3 create_mask,PASS,"single=1250, multi=2510",
+T7.4 create_groups_nested,PASS,keys=['df_summary_all'],
+T7.5 create_groups_flat,PASS,"groups=['all', 'month_202511']",
+T7.6 create_groups_no_conditions,PASS,正确抛出KeyError,
+T7.7 report_load_data_score,PASS,score_min=0.0002,
+T8.1 cli_help,PASS,exit_code=0,2.9843838214874268
+T8.2 cli_feature_analysis,FAIL,"stderr: 2026-04-30 18:06:14,244 - INFO - 数据量: 5000, 特征数: 15
+2026-04-30 18:06:14,248 - INFO - 覆盖率计算完成
+D:\05.基础建设\P.单机版模型自动化工具\AutoModelBuilderTools.py:129: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to reta",
+T8.3 cli_scoring,PASS,"exit=0, rows=5000",3.3376505374908447
+T8.4 cli_model_evaluation,PASS,"exit=0, rows=16",3.0996015071868896
+T8.5 cli_train_xgb,PASS,"exit=0, model saved",48.40432524681091
+T8.6 cli_attribution,FAIL,"stderr: 2026-04-30 18:07:13,777 - INFO - 加载模型和特征列表...
+2026-04-30 18:07:13,782 - INFO - 模型加载完成，特征数: 15
+2026-04-30 18:07:13,818 - INFO - === 特征分布偏移分析 === 基准月=202511, 当前月=202601
+2026-04-30 18:07:13,820 - INFO - 基准月样本: 0, 当前月样本: 0
+C:\Users\yangxuejun-jk\AppData\Local\miniconda3\Lib\site-packages\xgboost",
+T8.7 cli_scoring_json_model,FAIL,"stderr: 2026-04-30 18:07:17,311 - INFO - 加载模型: D:\05.基础建设\P.单机版模型自动化工具\test_workspace\test_output_v2\test_booster.json
+2026-04-30 18:07:17,323 - INFO - 特征数: 15, 最优迭代: 0
+2026-04-30 18:07:17,323 - INFO - 开始分批打分: D:\05.基础建设\P.单机版模型自动化工具\test_workspace\test_output_v2\test_data.csv, chunk_size=0
+2026-04-",
+T8.8 cli_feature_analysis_psi,PASS,"exit=0, psi.csv exists",4.414494752883911
+T9.1 save_load_consistency,PASS,预测结果完全一致,0.009478569030761719
+T9.2 auc_ks_reproducibility,PASS,"auc=0.4879, ks=0.0908",0.0064051151275634766
+T9.3 woe_no_nan,PASS,0 NaN after transform,
+T9.4 psi_symmetry,PASS,"forward=0.0351, backward=0.0739",
+T9.5 lr_predict_range,PASS,"range=[0.0269, 0.0961]",

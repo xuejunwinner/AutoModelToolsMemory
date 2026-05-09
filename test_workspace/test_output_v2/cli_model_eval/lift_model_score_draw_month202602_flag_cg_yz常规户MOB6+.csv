@@ -1,0 +1,11 @@
+group,sample_count,y_count,y_rate,lift,cumlift,score_col,score_name,segment,draw_month,flag_cg_yz
+"(0.094, 0.833]",65,41,0.6307692307692307,9.907692307692308,9.907692307692308,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.0516, 0.094]",64,0,0.0,0.0,4.992248062015505,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.0364, 0.0516]",64,0,0.0,0.0,3.3367875647668397,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.0248, 0.0364]",65,0,0.0,0.0,2.4961240310077524,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.0186, 0.0248]",64,0,0.0,0.0,2.0,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.0142, 0.0186]",64,0,0.0,0.0,1.6683937823834198,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.0105, 0.0142]",65,0,0.0,0.0,1.4279379157427938,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.00719, 0.0105]",64,0,0.0,0.0,1.250485436893204,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(0.00481, 0.00719]",64,0,0.0,0.0,1.1122625215889466,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+
+"(-0.000693, 0.00481]",65,0,0.0,0.0,1.0,model_score,XGB模型,draw_month=202602 | flag_cg_yz=常规户MOB6+,202602,常规户MOB6+

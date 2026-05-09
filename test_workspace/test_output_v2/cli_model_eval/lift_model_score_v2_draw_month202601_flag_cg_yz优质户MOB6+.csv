@@ -1,0 +1,11 @@
+group,sample_count,y_count,y_rate,lift,cumlift,score_col,score_name,segment,draw_month,flag_cg_yz
+"(0.0835, 0.739]",64,35,0.546875,9.875,9.875,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.0497, 0.0835]",63,0,0.0,0.0,4.9763779527559056,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.0339, 0.0497]",63,0,0.0,0.0,3.3263157894736843,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.0253, 0.0339]",63,0,0.0,0.0,2.49802371541502,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.0194, 0.0253]",63,0,0.0,0.0,2.0,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.0145, 0.0194]",63,0,0.0,0.0,1.6675461741424802,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.0099, 0.0145]",63,0,0.0,0.0,1.4298642533936652,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(0.00524, 0.0099]",63,0,0.0,0.0,1.2514851485148517,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(-0.00243, 0.00524]",63,0,0.0,0.0,1.1126760563380282,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
+"(-0.0244, -0.00243]",64,0,0.0,0.0,1.0,model_score_v2,V2模型,draw_month=202601 | flag_cg_yz=优质户MOB6+,202601,优质户MOB6+
