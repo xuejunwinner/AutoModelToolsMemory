@@ -55,7 +55,8 @@ except Exception as e:
 
 # T1.2 单特征IV
 try:
-    iv_val = FeatureAnalysisToolkit.calculate_single_iv(df, 'feature_00', target)
+    iv_summary, _ = FeatureAnalysisToolkit.calculate_iv_detail(df[['feature_00', target]], target)
+    iv_val = iv_summary['iv'].iloc[0]
     assert isinstance(iv_val, float)
     record("calculate_single_iv", True, f"iv={iv_val:.4f}")
 except Exception as e:
@@ -63,10 +64,10 @@ except Exception as e:
 
 # T1.3 批量IV
 try:
-    df_iv = FeatureAnalysisToolkit.calculate_batch_iv(df[features + [target]], target)
-    assert isinstance(df_iv, pd.DataFrame)
-    assert 'feature' in df_iv.columns and 'iv' in df_iv.columns
-    record("calculate_batch_iv", True, f"{len(df_iv)} features")
+    iv_summary, _ = FeatureAnalysisToolkit.calculate_iv_detail(df[features + [target]], target)
+    assert isinstance(iv_summary, pd.DataFrame)
+    assert 'feature' in iv_summary.columns and 'iv' in iv_summary.columns
+    record("calculate_batch_iv", True, f"{len(iv_summary)} features")
 except Exception as e:
     record("calculate_batch_iv", False, str(e))
 
@@ -83,7 +84,8 @@ except Exception as e:
 try:
     df_old = df[df['draw_month'] == '202511']
     df_new = df[df['draw_month'] == '202601']
-    psi_val = FeatureAnalysisToolkit.calculate_psi(df_new['feature_00'], df_old['feature_00'])
+    psi_result = FeatureAnalysisToolkit.calculate_psi_detail(df_old['feature_00'], df_new['feature_00'])
+    psi_val = psi_result['psi']
     assert isinstance(psi_val, float) or np.isnan(psi_val)
     record("calculate_psi", True, f"psi={psi_val}")
 except Exception as e:
@@ -91,7 +93,8 @@ except Exception as e:
 
 # T1.6 PSI简单版
 try:
-    psi_simple = FeatureAnalysisToolkit.calculate_psi_simple(df_old['feature_00'], df_new['feature_00'])
+    psi_result = FeatureAnalysisToolkit.calculate_psi_detail(df_old['feature_00'], df_new['feature_00'], dropna=True)
+    psi_simple = psi_result['psi']
     assert isinstance(psi_simple, float)
     record("calculate_psi_simple", True, f"psi={psi_simple:.4f}")
 except Exception as e:
@@ -100,14 +103,14 @@ except Exception as e:
 # T1.7 单特征AUC
 try:
     valid = df[target].isin([0, 1])
-    auc_val = FeatureAnalysisToolkit.calculate_single_auc(df.loc[valid, target].values, df.loc[valid, 'feature_00'].values)
+    auc_val = FeatureAnalysisToolkit.calculate_auc_ks(df.loc[valid, target].values, df.loc[valid, 'feature_00'].values, metrics='auc')['auc']
     record("calculate_single_auc", True, f"auc={auc_val}")
 except Exception as e:
     record("calculate_single_auc", False, str(e))
 
 # T1.8 KS计算
 try:
-    ks_val = FeatureAnalysisToolkit.calculate_ks(df.loc[valid, target].values, df.loc[valid, 'feature_00'].values)
+    ks_val = FeatureAnalysisToolkit.calculate_auc_ks(df.loc[valid, target].values, df.loc[valid, 'feature_00'].values, metrics='ks')['ks']
     record("calculate_ks", True, f"ks={ks_val}")
 except Exception as e:
     record("calculate_ks", False, str(e))
@@ -441,9 +444,9 @@ print("=" * 60)
 try:
     analyzer = ModelAttributionAnalyzer('test_output/test_booster.pkl', 'test_output/test_features.pkl', missing_value=-999.0)
     info_vars = ['appl_no', 'draw_month', 'flag_cg_yz', 'cust_status3', 'dpd30_term1', 'dpd30_term3']
-    df_stat, auc_summary = analyzer.analyze_distribution_shift(
+    df_stat, psi_detail_df, auc_summary = analyzer.analyze_distribution_shift(
         df, 'draw_month', target, '202511', '202601',
-        info_vars=info_vars, output_path='test_output/distribution_shift.csv')
+        info_vars=info_vars, output_dir='test_output')
     assert len(df_stat) > 0
     record("distribution_shift", True, f"auc_drop={auc_summary['auc_drop']:.4f}, {len(df_stat)} features")
 except Exception as e:
@@ -453,7 +456,7 @@ except Exception as e:
 try:
     df_abl, auc_base = analyzer.permutation_importance(
         df, 'draw_month', target, '202601',
-        info_vars=info_vars, n_workers=1, output_path='test_output/permutation_importance.csv')
+        info_vars=info_vars, n_workers=1)
     assert len(df_abl) > 0
     record("permutation_importance", True, f"base_auc={auc_base:.4f}, {len(df_abl)} features")
 except Exception as e:
@@ -534,7 +537,7 @@ try:
     tiny = pd.read_csv('test_tiny.csv', sep='\t')
     tiny.columns = tiny.columns.str.lower()
     tiny_feats = ['feature_00', 'feature_01']
-    auc_val = FeatureAnalysisToolkit.calculate_single_auc(tiny['dpd30_term1'].values, tiny['feature_00'].values)
+    auc_val = FeatureAnalysisToolkit.calculate_auc_ks(tiny['dpd30_term1'].values, tiny['feature_00'].values, metrics='auc')['auc']
     assert np.isnan(auc_val), f"期望NaN，实际{auc_val}"
     record("edge_case_all_zero_target", True, "返回NaN（预期行为）")
 except Exception as e:
@@ -544,7 +547,7 @@ except Exception as e:
 try:
     nan_df = pd.read_csv('test_nan.csv', sep='\t')
     nan_df.columns = nan_df.columns.str.lower()
-    psi_nan = FeatureAnalysisToolkit.calculate_psi(nan_df['feature_00'], nan_df['feature_00'])
+    psi_nan = FeatureAnalysisToolkit.calculate_psi_detail(nan_df['feature_00'], nan_df['feature_00'])['psi']
     record("edge_case_all_nan_feature", True, f"psi={psi_nan}")
 except Exception as e:
     record("edge_case_all_nan_feature", False, str(e))
@@ -553,7 +556,8 @@ except Exception as e:
 try:
     const_df = pd.read_csv('test_const.csv', sep='\t')
     const_df.columns = const_df.columns.str.lower()
-    iv_const = FeatureAnalysisToolkit.calculate_single_iv(const_df, 'feature_const', 'dpd30_term1')
+    iv_summary_const, _ = FeatureAnalysisToolkit.calculate_iv_detail(const_df[['feature_const', 'dpd30_term1']], 'dpd30_term1')
+    iv_const = iv_summary_const['iv'].iloc[0]
     assert iv_const == 0.0, f"期望0.0，实际{iv_const}"
     record("edge_case_const_feature_iv", True, f"iv={iv_const}")
 except Exception as e:
@@ -561,7 +565,7 @@ except Exception as e:
 
 # T7.4 PSI全空数据
 try:
-    psi_empty = FeatureAnalysisToolkit.calculate_psi(pd.Series([], dtype=float), pd.Series([], dtype=float))
+    psi_empty = FeatureAnalysisToolkit.calculate_psi_detail(pd.Series([], dtype=float), pd.Series([], dtype=float))['psi']
     assert psi_empty == 0.0
     record("edge_case_psi_empty", True, f"psi={psi_empty}")
 except Exception as e:
@@ -586,7 +590,8 @@ except Exception as e:
 # T7.7 空DataFrame
 try:
     empty_df = pd.DataFrame(columns=['feature_00', 'dpd30_term1'])
-    iv_empty = FeatureAnalysisToolkit.calculate_single_iv(empty_df, 'feature_00', 'dpd30_term1')
+    iv_summary_empty, _ = FeatureAnalysisToolkit.calculate_iv_detail(empty_df, 'dpd30_term1')
+    iv_empty = iv_summary_empty['iv'].iloc[0] if len(iv_summary_empty) > 0 else 0.0
     assert iv_empty == 0.0
     record("edge_case_empty_df_iv", True, f"iv={iv_empty}")
 except Exception as e:
@@ -797,27 +802,28 @@ print("\n" + "=" * 60)
 print("T10. ModelAttributionAnalyzer 委托方法测试")
 print("=" * 60)
 
-# T10.1 calc_psi 委托
+# T10.1 calc_psi 委托 → FeatureAnalysisToolkit.calculate_psi_detail
 try:
-    psi_delegated = ModelAttributionAnalyzer.calc_psi(
-        df_new['feature_00'], df_old['feature_00'])
+    psi_delegated = FeatureAnalysisToolkit.calculate_psi_detail(
+        df_old['feature_00'], df_new['feature_00'])['psi']
     assert isinstance(psi_delegated, float) or np.isnan(psi_delegated)
     record("calc_psi_delegated", True, f"psi={psi_delegated}")
 except Exception as e:
     record("calc_psi_delegated", False, str(e))
 
-# T10.2 calc_single_iv 委托
+# T10.2 calc_single_iv 委托 → FeatureAnalysisToolkit.calculate_iv_detail
 try:
-    iv_delegated = ModelAttributionAnalyzer.calc_single_iv(df, 'feature_00', target)
+    iv_summary, _ = FeatureAnalysisToolkit.calculate_iv_detail(df[['feature_00', target]], target)
+    iv_delegated = iv_summary['iv'].iloc[0]
     assert isinstance(iv_delegated, float)
     record("calc_single_iv_delegated", True, f"iv={iv_delegated:.4f}")
 except Exception as e:
     record("calc_single_iv_delegated", False, str(e))
 
-# T10.3 calc_single_auc 委托
+# T10.3 calc_single_auc 委托 → FeatureAnalysisToolkit.calculate_auc_ks
 try:
-    auc_delegated = ModelAttributionAnalyzer.calc_single_auc(
-        df.loc[valid, target].values, df.loc[valid, 'feature_00'].values)
+    auc_delegated = FeatureAnalysisToolkit.calculate_auc_ks(
+        df.loc[valid, target].values, df.loc[valid, 'feature_00'].values, metrics='auc')['auc']
     assert isinstance(auc_delegated, (float, int, np.floating))
     record("calc_single_auc_delegated", True, f"auc={auc_delegated}")
 except Exception as e:
@@ -836,7 +842,7 @@ try:
     else:
         df_abl_mp, auc_base_mp = analyzer.permutation_importance(
             df, 'draw_month', target, '202601',
-            info_vars=info_vars, n_workers=2, output_path='test_output/permutation_importance_mp.csv')
+            info_vars=info_vars, n_workers=2)
         assert len(df_abl_mp) > 0
         record("permutation_importance_multiprocess", True, f"base_auc={auc_base_mp:.4f}, {len(df_abl_mp)} features")
 except Exception as e:
@@ -858,7 +864,7 @@ try:
 except Exception as e:
     record("feature_importances_frame", False, str(e))
 
-# T12.2 predict_evals
+# T12.2 predict_evals → use FeatureAnalysisToolkit.calculate_auc_ks
 try:
     booster_for_eval = joblib.load('test_output/test_booster.pkl')
     feat_list_eval = joblib.load('test_output/test_features.pkl')
@@ -867,8 +873,8 @@ try:
     eval_data[feat_list_eval] = eval_data[feat_list_eval].fillna(-999.0)
     dtest_eval = xgb.DMatrix(eval_data[feat_list_eval].values, feature_names=feat_list_eval, missing=-999.0)
     pred_eval = booster_for_eval.predict(dtest_eval)
-    eval_result = BeamSearchFeatureSelector.predict_evals(pred_eval, eval_data[target].values)
-    assert 'auc' in eval_result and 'ks' in eval_result and 'total_num' in eval_result
+    eval_result = FeatureAnalysisToolkit.calculate_auc_ks(eval_data[target].values, pred_eval)
+    assert 'auc' in eval_result and 'ks' in eval_result
     record("predict_evals", True, f"auc={eval_result['auc']}, ks={eval_result['ks']}")
 except Exception as e:
     record("predict_evals", False, str(e))

@@ -172,10 +172,11 @@ try:
 except Exception as e:
     record("T1.2 calculate_woe_edge", FAIL, str(e))
 
-# T1.3 calculate_single_iv
+# T1.3 calculate_single_iv → calculate_iv_detail
 try:
     t0 = time.time()
-    iv_val = FeatureAnalysisToolkit.calculate_single_iv(df, 'feature_00', target)
+    iv_summ, _ = FeatureAnalysisToolkit.calculate_iv_detail(df[['feature_00', target]], target)
+    iv_val = iv_summ['iv'].iloc[0]
     assert isinstance(iv_val, float)
     record("T1.3 calculate_single_iv", PASS, f"iv={iv_val:.4f}", time.time()-t0)
 except Exception as e:
@@ -184,7 +185,8 @@ except Exception as e:
 # T1.4 calculate_single_iv 常数列
 try:
     const_df = pd.DataFrame({'feature_const': [42.0]*100, 'dpd30_term1': np.random.choice([0,1], 100)})
-    iv_const = FeatureAnalysisToolkit.calculate_single_iv(const_df, 'feature_const', 'dpd30_term1')
+    iv_summ_c, _ = FeatureAnalysisToolkit.calculate_iv_detail(const_df, 'dpd30_term1')
+    iv_const = iv_summ_c['iv'].iloc[0] if len(iv_summ_c) > 0 else 0.0
     assert iv_const == 0.0
     record("T1.4 calculate_single_iv_const", PASS, f"iv={iv_const}")
 except Exception as e:
@@ -193,20 +195,21 @@ except Exception as e:
 # T1.5 calculate_single_iv 空DF
 try:
     empty_df = pd.DataFrame({'f': pd.Series(dtype=float), 't': pd.Series(dtype=float)})
-    iv_empty = FeatureAnalysisToolkit.calculate_single_iv(empty_df, 'f', 't')
+    iv_summ_e, _ = FeatureAnalysisToolkit.calculate_iv_detail(empty_df, 't')
+    iv_empty = iv_summ_e['iv'].iloc[0] if len(iv_summ_e) > 0 else 0.0
     assert iv_empty == 0.0
     record("T1.5 calculate_single_iv_empty", PASS, f"iv={iv_empty}")
 except Exception as e:
     record("T1.5 calculate_single_iv_empty", FAIL, str(e))
 
-# T1.6 calculate_batch_iv
+# T1.6 calculate_batch_iv → calculate_iv_detail
 try:
     t0 = time.time()
-    df_iv = FeatureAnalysisToolkit.calculate_batch_iv(df[features + [target]], target)
-    assert isinstance(df_iv, pd.DataFrame)
-    assert 'feature' in df_iv.columns and 'iv' in df_iv.columns
-    assert len(df_iv) == len(features)
-    record("T1.6 calculate_batch_iv", PASS, f"{len(df_iv)} features, top_iv={df_iv.iloc[0]['iv']:.4f}", time.time()-t0)
+    iv_summ_b, _ = FeatureAnalysisToolkit.calculate_iv_detail(df[features + [target]], target)
+    assert isinstance(iv_summ_b, pd.DataFrame)
+    assert 'feature' in iv_summ_b.columns and 'iv' in iv_summ_b.columns
+    assert len(iv_summ_b) == len(features)
+    record("T1.6 calculate_batch_iv", PASS, f"{len(iv_summ_b)} features, top_iv={iv_summ_b.iloc[0]['iv']:.4f}", time.time()-t0)
 except Exception as e:
     record("T1.6 calculate_batch_iv", FAIL, str(e))
 
@@ -221,12 +224,12 @@ try:
 except Exception as e:
     record("T1.7 woe_transform", FAIL, str(e))
 
-# T1.8 calculate_psi
+# T1.8 calculate_psi → calculate_psi_detail
 try:
     t0 = time.time()
     df_old = df_full[df_full['draw_month'] == '202511']
     df_new = df_full[df_full['draw_month'] == '202601']
-    psi_val = FeatureAnalysisToolkit.calculate_psi(df_new['feature_00'], df_old['feature_00'])
+    psi_val = FeatureAnalysisToolkit.calculate_psi_detail(df_old['feature_00'], df_new['feature_00'])['psi']
     assert isinstance(psi_val, float) or np.isnan(psi_val)
     record("T1.8 calculate_psi", PASS, f"psi={psi_val}", time.time()-t0)
 except Exception as e:
@@ -234,7 +237,7 @@ except Exception as e:
 
 # T1.9 calculate_psi 空序列
 try:
-    psi_empty = FeatureAnalysisToolkit.calculate_psi(pd.Series([], dtype=float), pd.Series([], dtype=float))
+    psi_empty = FeatureAnalysisToolkit.calculate_psi_detail(pd.Series([], dtype=float), pd.Series([], dtype=float))['psi']
     assert psi_empty == 0.0
     record("T1.9 calculate_psi_empty", PASS, f"psi={psi_empty}")
 except Exception as e:
@@ -244,26 +247,26 @@ except Exception as e:
 try:
     s_nan = pd.Series([np.nan, np.nan, np.nan])
     s_nan2 = pd.Series([np.nan, np.nan])
-    psi_nan = FeatureAnalysisToolkit.calculate_psi(s_nan, s_nan2)
+    psi_nan = FeatureAnalysisToolkit.calculate_psi_detail(s_nan, s_nan2)['psi']
     record("T1.10 calculate_psi_all_nan", PASS, f"psi={psi_nan}")
 except Exception as e:
     record("T1.10 calculate_psi_all_nan", FAIL, str(e))
 
-# T1.11 calculate_psi_simple
+# T1.11 calculate_psi_simple → calculate_psi_detail(dropna=True)
 try:
     t0 = time.time()
-    psi_simple = FeatureAnalysisToolkit.calculate_psi_simple(df_old['feature_00'].dropna(), df_new['feature_00'].dropna())
+    psi_simple = FeatureAnalysisToolkit.calculate_psi_detail(df_old['feature_00'], df_new['feature_00'], dropna=True)['psi']
     assert isinstance(psi_simple, float)
     record("T1.11 calculate_psi_simple", PASS, f"psi={psi_simple:.4f}", time.time()-t0)
 except Exception as e:
     record("T1.11 calculate_psi_simple", FAIL, str(e))
 
-# T1.12 calculate_single_auc
+# T1.12 calculate_single_auc → calculate_auc_ks(metrics='auc')
 try:
     t0 = time.time()
     valid_mask = df[target].isin([0, 1])
-    auc_val = FeatureAnalysisToolkit.calculate_single_auc(
-        df.loc[valid_mask, target].values, df.loc[valid_mask, 'feature_00'].values)
+    auc_val = FeatureAnalysisToolkit.calculate_auc_ks(
+        df.loc[valid_mask, target].values, df.loc[valid_mask, 'feature_00'].values, metrics='auc')['auc']
     record("T1.12 calculate_single_auc", PASS, f"auc={auc_val}", time.time()-t0)
 except Exception as e:
     record("T1.12 calculate_single_auc", FAIL, str(e))
@@ -272,16 +275,16 @@ except Exception as e:
 try:
     nan_vals = np.array([np.nan, np.nan, np.nan, np.nan, np.nan])
     y_vals = np.array([0, 1, 0, 1, 0])
-    auc_nan = FeatureAnalysisToolkit.calculate_single_auc(y_vals, nan_vals)
+    auc_nan = FeatureAnalysisToolkit.calculate_auc_ks(y_vals, nan_vals, metrics='auc')['auc']
     record("T1.13 calculate_single_auc_nan_feat", PASS, f"auc={auc_nan}")
 except Exception as e:
     record("T1.13 calculate_single_auc_nan_feat", FAIL, str(e))
 
-# T1.14 calculate_ks
+# T1.14 calculate_ks → calculate_auc_ks(metrics='ks')
 try:
     t0 = time.time()
-    ks_val = FeatureAnalysisToolkit.calculate_ks(
-        df.loc[valid_mask, target].values, df.loc[valid_mask, 'feature_00'].values)
+    ks_val = FeatureAnalysisToolkit.calculate_auc_ks(
+        df.loc[valid_mask, target].values, df.loc[valid_mask, 'feature_00'].values, metrics='ks')['ks']
     assert isinstance(ks_val, float)
     record("T1.14 calculate_ks", PASS, f"ks={ks_val}", time.time()-t0)
 except Exception as e:
@@ -632,11 +635,12 @@ try:
 except Exception as e:
     record("T5.1 attribution_init", FAIL, str(e))
 
-# T5.2 委托方法
+# T5.2 委托方法 → FeatureAnalysisToolkit
 try:
-    psi_val = analyzer.calc_psi(df_new['feature_00'], df_old['feature_00'])
-    iv_val = analyzer.calc_single_iv(df, 'feature_00', target)
-    auc_val = analyzer.calc_single_auc(df.loc[valid_mask, target].values, df.loc[valid_mask, 'feature_00'].values)
+    psi_val = FeatureAnalysisToolkit.calculate_psi_detail(df_old['feature_00'], df_new['feature_00'])['psi']
+    iv_summ, _ = FeatureAnalysisToolkit.calculate_iv_detail(df[['feature_00', target]], target)
+    iv_val = iv_summ['iv'].iloc[0]
+    auc_val = FeatureAnalysisToolkit.calculate_auc_ks(df.loc[valid_mask, target].values, df.loc[valid_mask, 'feature_00'].values, metrics='auc')['auc']
     record("T5.2 attribution_delegates", PASS, f"psi={psi_val}, iv={iv_val:.4f}, auc={auc_val}")
 except Exception as e:
     record("T5.2 attribution_delegates", FAIL, str(e))
@@ -644,9 +648,9 @@ except Exception as e:
 # T5.3 分布偏移分析
 try:
     t0 = time.time()
-    df_stat, auc_summary = analyzer.analyze_distribution_shift(
+    df_stat, psi_detail_df, auc_summary = analyzer.analyze_distribution_shift(
         df_full, 'draw_month', target, '202511', '202601',
-        info_vars=info_vars, output_path='test_output_v2/distribution_shift.csv')
+        info_vars=info_vars, output_dir='test_output_v2')
     assert len(df_stat) > 0
     assert 'psi' in df_stat.columns and 'iv_old' in df_stat.columns
     assert 'auc_old' in auc_summary and 'auc_new' in auc_summary
@@ -660,10 +664,9 @@ try:
     t0 = time.time()
     df_abl, auc_base = analyzer.permutation_importance(
         df_full, 'draw_month', target, '202601',
-        info_vars=info_vars, n_workers=1, output_path='test_output_v2/permutation_importance.csv')
+        info_vars=info_vars, n_workers=1)
     assert len(df_abl) > 0
-    assert 'abl_auc' in df_abl.columns and 'abl_delta' in df_abl.columns
-    assert os.path.exists('test_output_v2/permutation_importance.csv')
+    assert 'abl_auc_mean' in df_abl.columns and 'abl_delta_mean' in df_abl.columns
     record("T5.4 permutation_importance", PASS, f"base_auc={auc_base:.4f}, {len(df_abl)} features", time.time()-t0)
 except Exception as e:
     record("T5.4 permutation_importance", FAIL, str(e))
@@ -714,14 +717,13 @@ try:
 except Exception as e:
     record("T6.1 beamsearch_load_data", FAIL, str(e))
 
-# T6.2 predict_evals
+# T6.2 predict_evals → FeatureAnalysisToolkit.calculate_auc_ks
 try:
     t0 = time.time()
     y_pred = np.random.rand(100)
     y_true = np.random.choice([0, 1], 100)
-    eval_res = BeamSearchFeatureSelector.predict_evals(y_pred, y_true)
-    assert 'auc' in eval_res and 'ks' in eval_res and 'total_num' in eval_res
-    assert eval_res['total_num'] == 100
+    eval_res = FeatureAnalysisToolkit.calculate_auc_ks(y_true, y_pred)
+    assert 'auc' in eval_res and 'ks' in eval_res
     record("T6.2 predict_evals", PASS, f"auc={eval_res['auc']}, ks={eval_res['ks']}", time.time()-t0)
 except Exception as e:
     record("T6.2 predict_evals", FAIL, str(e))
@@ -1082,8 +1084,8 @@ except Exception as e:
 try:
     s1 = df_old['feature_00'].dropna().iloc[:100]
     s2 = df_new['feature_00'].dropna().iloc[:100]
-    psi_forward = FeatureAnalysisToolkit.calculate_psi(s1, s2)
-    psi_backward = FeatureAnalysisToolkit.calculate_psi(s2, s1)
+    psi_forward = FeatureAnalysisToolkit.calculate_psi_detail(s1, s2)['psi']
+    psi_backward = FeatureAnalysisToolkit.calculate_psi_detail(s2, s1)['psi']
     assert abs(psi_forward - psi_backward) < 0.5
     record("T9.4 psi_symmetry", PASS, f"forward={psi_forward}, backward={psi_backward}")
 except Exception as e:
